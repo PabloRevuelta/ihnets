@@ -46,74 +46,80 @@ def simulate_scenario(a_f_list,t_0,g_ig,params_dic, dt, fail_drop):
     boundary_nodes = [v['name'] for v in g_ig_energy.vs if v["type"] == "boundary"]
     power_source_nodes = [v['name'] for v in g_ig_energy.vs if v["type"] == "power sources"]
     generator_nodes = list(set(boundary_nodes + power_source_nodes))
+    v_ener_name_to_idx = {v["name"]: v.index for v in g_ig_energy.vs if "name" in v.attributes()}
+    e_ener_name_to_idx = {e["name"]: e.index for e in g_ig_energy.es if "name" in e.attributes()}
+
+    g_ig_failed_elements_energy=g_ig_energy.copy()
+    comps_energy = g_ig_failed_elements_energy.components(mode="weak")
+    membership = comps_energy.membership
+    comp_sets = [set(c) for c in comps_energy]
+    all_names = np.array(g_ig_failed_elements_energy.vs["name"])
+    v_name_to_idx = {v["name"]: v.index for v in g_ig_failed_elements_energy.vs if "name" in v.attributes()}
 
     while state_flag!='finished':
         actual_users=0
         t_ref = np.maximum(dt, round(t - params_dic['tFa'],1))
         index = int(round(t_ref / dt)) - 1
 
-        g_ig_failed_elements_energy=g_ig_energy.copy()
-
-        e_to_delete=[]
-        v_to_delete=[]
+        # 1. Calcular fallos (sin copiar grafo)
+        change_failed_v = False
+        change_failed_e = False
         for element in a_f_list:
-            if element['network']=='Energy network':
+            if element['network'] == 'Energy network':
                 if isinstance(element, ig.Vertex):
                     capacity_profile=asset_failure_profile(t,1,t_0,1,params_dic)
-                    element['energy']=capacity_profile
-                    if capacity_profile<1:
-                        state_flag='failure'
-                        v_energy=g_ig_failed_elements_energy.vs.find(name= element["name"])
-                        #print(element["name"])
-                        #print(v_energy["name"])
-                        v_to_delete.append(v_energy.index)
+                    energy_state=element["energy"]
+                    if capacity_profile < 1 and energy_state==1:
+                        state_flag = "failure"
+                        change_failed_v=True
+                        element["energy"] = 0
+                        g_ig_energy.vs[v_ener_name_to_idx[element["name"]]]["energy"]=0
+                    elif capacity_profile== 1 and energy_state==0:
+                        element["energy"] = 1
+                        g_ig_energy.vs[v_ener_name_to_idx[element["name"]]]["energy"]=1
+                        change_failed_v=True
                 elif isinstance(element, ig.Edge):
-                    flux_e=asset_failure_profile(t,1,t_0,1,params_dic)
-                    if flux_e<1:
-                        state_flag='failure'
-                        e_energy=g_ig_failed_elements_energy.es.find(name= element["name"])
-                        e_to_delete.append(e_energy.index)
-        g_ig_failed_elements_energy.delete_edges(e_to_delete)
-        g_ig_failed_elements_energy.delete_vertices(v_to_delete)
+                    flux = asset_failure_profile(t, 1, t_0, 1, params_dic)
+                    energy_state=element["energy"]
+                    if flux < 1 and energy_state==1:
+                        state_flag = "failure"
+                        change_failed_e=True
+                        element["energy"] = 0
+                        g_ig_energy.es[e_ener_name_to_idx[element["name"]]]["energy"]=0
+                    elif flux== 1 and energy_state==0:
+                        element["energy"] = 1
+                        g_ig_energy.es[e_ener_name_to_idx[element["name"]]]["energy"]=1
+                        change_failed_e=True
 
-        '''e_to_delete=[]
-        for e in g_ig_failed_elements_energy.es:
-            e_main=g_ig.es.find(name= e["name"])
-            if e_main in a_f_list:
-                flux_e=asset_failure_profile(t,1,t_0,1,params_dic)
-                if flux_e<1:
-                    state_flag='failure'
-                    e_to_delete.append(e.index)
-        g_ig_failed_elements_energy.delete_edges(e_to_delete)
-        v_to_delete=[]
-        for v in g_ig_failed_elements_energy.vs:
-            v_main=g_ig.vs.find(name= v["name"])
-            if v_main in a_f_list:
-                capacity_profile=asset_failure_profile(t,1,t_0,1,params_dic)
-                v_main['energy']=capacity_profile
-                if capacity_profile<1:
-                    state_flag='failure'
-                    #print(v_main['name'],v_main['users'])
 
-                    #neighbors_idx = g_ig_failed_elements_energy.neighbors(v)
-                    #neighbors_names = [g_ig_failed_elements_energy.vs[i]["name"] for i in neighbors_idx]
-                    #print(neighbors_names)
 
-                    v_to_delete.append(v.index)'''
+        # 3. Solo si hubo fallos → recomputar componentes energía
+        if change_failed_v or change_failed_e:
+            active_nodes = [v.index for v in g_ig_energy.vs if v["energy"] == 1]
+            active_edges = [e.index for e in g_ig_energy.es if e["energy"] == 1]
+            g_ig_failed_elements_energy = g_ig_energy.subgraph_edges(active_edges, delete_vertices=False).induced_subgraph(active_nodes)
 
-        all_names = np.array(g_ig_failed_elements_energy.vs["name"])
-
-        comps_energy = g_ig_failed_elements_energy.components(mode="weak")
+            comps_energy = g_ig_failed_elements_energy.components(mode="weak")
+            membership = comps_energy.membership
+            comp_sets = [set(c) for c in comps_energy]
+            all_names = np.array(g_ig_failed_elements_energy.vs["name"])
+            v_name_to_idx = {v["name"]: v.index for v in g_ig_failed_elements_energy.vs if "name" in v.attributes()}
 
         for v in g_ig.vs:
             if v['network']=='Energy network':
 
                 if v['energy']==1:
-                    reachable_nodes = comps_energy[comps_energy.membership[g_ig_failed_elements_energy.vs.find(name= v["name"]).index]]
-                    reachable_names = all_names[reachable_nodes]
-                    #if v['name']=="Energy network node 143":
-                        #print([g_ig_failed_elements_energy.vs[i]["name"] for i in reachable_nodes])
-                        #print(generator_nodes)
+
+                    # Obtener índice del nodo en g_ig_energy
+                    node_idx = v_name_to_idx[v["name"]]
+
+                    # ID del componente al que pertenece
+                    comp_id = membership[node_idx]
+
+                    # Conjunto de nodos activos en ese componente
+                    reachable_nodes = comp_sets[comp_id]
+                    reachable_names = all_names[list(reachable_nodes)]
+
                     if set(generator_nodes) & set(reachable_names):
                       node_users=v['users']
                     else:
@@ -122,8 +128,7 @@ def simulate_scenario(a_f_list,t_0,g_ig,params_dic, dt, fail_drop):
                 else:
                     node_users=0
                 scenario_dic[v['name']].append(node_users)
-                #if node_users<v['users']:
-                    #print(v['name'],v['users'],node_users)
+
                 actual_users+=node_users
 
             else:

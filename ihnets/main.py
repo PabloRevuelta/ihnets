@@ -65,6 +65,9 @@ def main():
     dt = 0.1  # (h)
     n = 1
 
+    main_graph.vs["energy"] = [1] * main_graph.vcount()
+    main_graph.es["energy"] = [1] * main_graph.ecount()
+
     scenarios_dic=resil_vuln_analysis.resil_vun_analysis(main_graph,t_0,n,params_dic, dt, fail_drop)
 
     with open("datos.json", "w", encoding="utf-8") as f:
