@@ -56,7 +56,7 @@ def main():
     print('Networks created')
 
     #ACTUALIZAR
-    plots.plots_networks(networks_dic, interconnections_dic, main_graph, gdf_cut)
+    #plots.plots_networks(networks_dic, interconnections_dic, main_graph, gdf_cut)
     ###########
 
     fail_drop = 1.0  # Total
@@ -76,7 +76,7 @@ def main():
     print('Analysis finished')
 
     # ACTUALIZAR
-    plots.plots_resil_vun_analysis(scenarios_dic)
+    #plots.plots_resil_vun_analysis(scenarios_dic)
     ###########
 
 
