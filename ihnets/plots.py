@@ -4,51 +4,74 @@ import igraph as ig
 import os
 
 def plots_networks(networks_dic,networks_intercon_dic,combined_graph,gdf_cut):
+
     for network, dic in networks_dic.items():
-
-        plot_gdf(network,networks_dic[network]['lines gdf'],networks_dic[network]['nodes gdf'],gdf_cut)
-
-        node_colors = ['red' if v['type'] == 'station' else 'yellow' for v in networks_dic[network]['igraph'].vs]
-        plot_ig_graph(network, networks_dic[network]['igraph'], gdf_cut, node_colors,'blue')
-
+        plot_gdf(network, dic['lines gdf'], dic['nodes gdf'], gdf_cut)
+        network_nodes_types = [key for key in dic['nodes file paths'].keys()]
+        node_colors = ["#D1495B" if v["type"] in network_nodes_types else "#E9C46A" for v in
+                       networks_dic[network]["igraph"].vs]
+        plot_ig_graph(network, networks_dic[network]['igraph'], gdf_cut, node_colors, "#6BA292")
         layout = networks_dic[network]['igraph'].layout("fr")  # "fr" = Fruchterman-Reingold, similar a nx.spring_layout
-        plot_ig_asbtract(network, layout, networks_dic[network]['igraph'], node_colors, 'blue')
+        plot_ig_asbtract(network, layout, networks_dic[network]['igraph'], node_colors, '#6BA292')
 
-    for networks, g_ig in networks_intercon_dic.items():
-        network_1 = networks.split("+")[0].strip()
-        node_colors = [
-            'red' if v['F_CODE'] in networks_dic[network_1]['nodes gdf']["F_CODE"].unique().tolist() else 'yellow' for v
-            in g_ig.vs]
-        plot_ig_graph("interconexiones", g_ig, gdf_cut, node_colors, 'blue')
+    for networks, dic in networks_intercon_dic.items():
+        network_1 = networks.split(" - ")[0].strip()
+        node_colors = ['#D1495B' if v['network'] == network_1 else '#3B7EA1' for v in dic['igraph'].vs]
+        plot_ig_graph(networks, dic['igraph'], gdf_cut, node_colors, '#6BA292')
 
-    node_colors = ['red' if v['network'] == 'Roads network' else 'yellow' for v in combined_graph.vs]
-    plot_ig_graph("combinado", combined_graph, gdf_cut, node_colors,'blue')
+    nodes_color_map = {
+        "Roads network": "#D1495B",  # terracota
+        "Railway network": "#3B7EA1",  # azul
+        "Energy network": "#7CA982"  # verde
+    }
+    # Colores de aristas (más claros)
+    edge_color_map = {
+        "Roads network": "#E2959B",
+        "Railway network": "#85B1D1",
+        "Energy network": "#A0C29D"
+    }
+    # Asignar colores a cada nodo
+    node_colors = [nodes_color_map.get(v["network"]) for v in combined_graph.vs]
+    edges_colors = [edge_color_map.get(e["network"], '#F4D35E') for e in combined_graph.es]
 
+    plot_ig_graph("combinado", combined_graph, gdf_cut, node_colors, edges_colors)
+
+    # --- 1️⃣ Separar nodos por red
     nodes_A = [v.index for v in combined_graph.vs if v["network"] == 'Roads network']
     nodes_B = [v.index for v in combined_graph.vs if v["network"] == 'Railway network']
+    nodes_C = [v.index for v in combined_graph.vs if v["network"] == 'Energy network']
     sub_A = combined_graph.subgraph(nodes_A)
     sub_B = combined_graph.subgraph(nodes_B)
+    sub_C = combined_graph.subgraph(nodes_C)
     # --- 2️⃣ Layouts internos (FR)
     layout_A = np.array(sub_A.layout("fr"))
     layout_B = np.array(sub_B.layout("fr"))
+    layout_C = np.array(sub_C.layout("fr"))
     # Normalizar tamaños
     if layout_A.shape[0] > 0:
         layout_A = layout_A / np.max(np.abs(layout_A)) * 5
     if layout_B.shape[0] > 0:
         layout_B = layout_B / np.max(np.abs(layout_B)) * 5
-    # --- 3️⃣ Trasladar bloques
-    layout_A[:, 0] -= 10   # A hacia la izquierda
-    layout_B[:, 0] += 10   # B hacia la derecha
-    # --- 4️⃣ Combinar layouts
+    if layout_C.shape[0] > 0:
+        layout_C = layout_C / np.max(np.abs(layout_C)) * 5
+    # --- 3️⃣ Trasladar bloques para separar redes
+    layout_A[:, 0] -= 10  # A hacia la izquierda
+    layout_B[:, 0] += 0  # B centrado
+    layout_C[:, 0] += 10  # C hacia la derecha
+    # --- 4️⃣ Combinar layouts en el layout final
     layout = np.zeros((combined_graph.vcount(), 2))
     for i, node in enumerate(nodes_A):
         layout[node] = layout_A[i]
     for i, node in enumerate(nodes_B):
         layout[node] = layout_B[i]
-    layout=layout.tolist()
-    plot_ig_asbtract("combinado",layout,combined_graph,node_colors,'blue')
+    for i, node in enumerate(nodes_C):
+        layout[node] = layout_C[i]
+    layout = layout.tolist()
+    # --- 5️⃣ Llamar a la función de plotting abstracto
+    plot_ig_asbtract("Redes completas", layout, combined_graph, node_colors, edges_colors)
 
-    plot_ig_users_flux(combined_graph, gdf_cut, 'black', 'blue')
+    #plot_ig_users_flux(transport_graph, gdf_cut, 'black', 'blue')
+    #plot_ig_users(networks_dic['Energy network']["igraph"], gdf_cut, 'black', 'blue')
 
 def plots_resil_vun_analysis(scenarios_dic):
 
@@ -99,68 +122,60 @@ def plots_resil_vun_analysis(scenarios_dic):
     plt.close()
     os.startfile(file_name)
 
-    '''for node, dic in scenarios_dic.items():
-        plt.figure(figsize=(8, 5))
-        for nodes, lista in scenarios_dic[node].items():
-            # Solo plotear si hay algún cambio en la lista
-            if max(lista) - lista[0] > 1 or lista[0] - min(lista) > 1:
-                x = [i * 0.1 for i in range(len(lista))]
-                plt.plot(x, lista, marker='.', markersize=1, label=nodes)
-        plt.title(node)
-        plt.title("Node performance curve with 1 failed asset at t=1h with 100% drop. Failed asset: " + failed_asset)
-        plt.xlabel("Node performance (nº users)")
-        plt.ylabel("t (h)")
-        plt.grid(True)
-        plt.legend()
-        plt.show()'''
-
 def plot_gdf(network,gdf_lines,gdf_nodes,gdf_cut):
     fig, ax = plt.subplots(figsize=(10, 8))
     gdf_cut.plot(ax=ax, color="lightgrey", edgecolor="black", figsize=(8, 8))
-    gdf_lines.plot(ax=ax, color="green", edgecolor="black", linewidth=0.5)
-    gdf_nodes.plot(ax=ax, color="red", markersize=0.5)
+    gdf_lines.plot(ax=ax, color="#6BA292", edgecolor="black", linewidth=0.8)
+    gdf_nodes.plot(ax=ax, color="#D1495B", markersize=6,edgecolor="black",linewidth=0.3)
 
     plt.title("Mapa de "+network)
     file_name="mapa "+network+".png"
-    plt.savefig(file_name, dpi=300, bbox_inches="tight")
+    plt.savefig(file_name, dpi=600, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
 
-def plot_ig_graph(network, g_ig, gdf_cut, node_colors,edge_colors):
-    # Extraer coordenadas de los nodos
-    x_coords = [v['geometry'].x for v in g_ig.vs]
-    y_coords = [v['geometry'].y for v in g_ig.vs]
+def plot_ig_graph(network, g_ig, gdf_cut, node_colors, edge_colors):
+    # Extraer coordenadas reales de los nodos
+    x_coords = [v["geometry"].x for v in g_ig.vs]
+    y_coords = [v["geometry"].y for v in g_ig.vs]
     coords_layout = list(zip(x_coords, y_coords))
 
+    # Crear figura
     fig, ax = plt.subplots(figsize=(10, 8))
+    ax.set_facecolor("white")
 
-    # Dibujar capa de cortes si existe
+    # 1️⃣ Capa base (área de corte)
     if gdf_cut is not None:
-        gdf_cut.plot(ax=ax, facecolor="none", edgecolor="black")
+        gdf_cut.plot(ax=ax, color="lightgrey", edgecolor="black", linewidth=0.8, zorder=0)
 
+      # Dibujar grafo
     ig.plot(
         g_ig,
         target=ax,
-        layout=coords_layout,  # <-- usamos las coordenadas reales
-        vertex_size=20,
+        layout=coords_layout,
+        vertex_size=30,
         vertex_color=node_colors,
+        vertex_frame_width=0.5,
+        vertex_frame_color="black",
         edge_color=edge_colors,
-        vertex_frame_width=3,
-        edge_width=1,
+        edge_width=1.5,
+        edge_curved=False,
         vertex_label=None,
-        margin=20
+        margin=30
     )
 
-    # Ajustar límites
+    # Ajustar límites al área del corte
     if gdf_cut is not None:
         xmin, ymin, xmax, ymax = gdf_cut.total_bounds
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
+
     plt.title("Grafo geométrico de "+network)
 
-    # Guardar y abrir
-    file_name ="grafo geom "+network+".png"
-    plt.savefig(file_name, dpi=1200, bbox_inches="tight")
+    # Guardar archivo
+    file_name = f"grafo_geom_{network}.png"
+    plt.tight_layout()
+    plt.savefig(file_name, dpi=600, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
 
@@ -168,26 +183,29 @@ def plot_ig_asbtract(network,layout, g_ig, node_colors,edge_colors):
 
     # 2️⃣ Dibujar el grafo
     fig, ax = plt.subplots(figsize=(10, 8))
+    ax.set_facecolor("white")
 
-    g_ig = g_ig.simplify(combine_edges=None)
-
+       # Dibujar grafo
     ig.plot(
         g_ig,
-        target=ax,  # dibujar sobre matplotlib
-        layout=layout,  # layout abstracto
-        vertex_size=1,
-        edge_width=0.5,  # tamaño de los nodos
-        vertex_color=node_colors,  # color de nodos
-        edge_color=edge_colors,  # color de aristas
-        vertex_label=None,  # sin etiquetas
-        bbox=(1000, 800),  # tamaño de la imagen en pixeles
-        margin=20
+        target=ax,
+        layout=layout,
+        vertex_size=30,
+        vertex_color=node_colors,
+        vertex_frame_width=0.5,
+        vertex_frame_color="black",
+        edge_color=edge_colors,
+        edge_width=1.5,
+        edge_curved=False,
+        vertex_label=None,
+        margin=30
     )
+
     plt.title("Grafo abstracto de "+network)
 
     # Guardar y abrir
     file_name ="grafo abs "+network+".png"
-    plt.savefig(file_name, dpi=300, bbox_inches="tight")
+    plt.savefig(file_name, dpi=600, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
 
@@ -209,8 +227,6 @@ def plot_ig_users_flux(g_ig, gdf_cut, node_colors,edge_colors):
 
     # Creamos listas para flechas y etiquetas
     arrows = []
-    edge_labels = []
-    edge_widths = []
 
     for e in g_ig.es:
         u_idx, v_idx = e.source, e.target
@@ -267,9 +283,10 @@ def plot_ig_users_flux(g_ig, gdf_cut, node_colors,edge_colors):
         y_text = start[1] + t * dy
 
         # Desplazamiento perpendicular opcional para evitar solapamientos
-        perp_offset = 0.02 * length
-        x_text += -perp_offset * dy / length
-        y_text += perp_offset * dx / length
+        if length > 0:
+            perp_offset = 0.02 * length
+            x_text += -perp_offset * dy / length
+            y_text += perp_offset * dx / length
 
         # Dibujar la etiqueta
         ax.text(x_text, y_text, f"{flow:.2f}",
@@ -280,9 +297,65 @@ def plot_ig_users_flux(g_ig, gdf_cut, node_colors,edge_colors):
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
 
-    plt.title("Grafo de usuarios y flujos")
+    plt.title("Grafo de usuarios y flujos de transporte")
 
-    file_name ="grafo_ig_users_flux.png"
-    plt.savefig(file_name, dpi=1200, bbox_inches="tight")
+    file_name ="grafo_ig_transport_users_flux.png"
+    plt.savefig(file_name, dpi=600, bbox_inches="tight")
+    plt.close()
+    os.startfile(file_name)
+
+def plot_ig_users(g_ig, gdf_cut, node_colors, edge_colors):
+    """
+    Dibuja un grafo no dirigido mostrando solo nodos y aristas.
+    Cada nodo tiene su nombre y número de usuarios.
+    """
+    # Extraer coordenadas
+    x_coords = [v['geometry'].x for v in g_ig.vs]
+    y_coords = [v['geometry'].y for v in g_ig.vs]
+    coords_layout = list(zip(x_coords, y_coords))
+
+    # Crear figura
+    fig, ax = plt.subplots(figsize=(12,10))
+    ax.set_facecolor("white")
+
+    # Dibujar capa base si existe
+    if gdf_cut is not None:
+        gdf_cut.plot(ax=ax, facecolor="none", edgecolor="black")
+
+    # Dibujar aristas
+    for e in g_ig.es:
+        u_idx, v_idx = e.source, e.target
+        x = [coords_layout[u_idx][0], coords_layout[v_idx][0]]
+        y = [coords_layout[u_idx][1], coords_layout[v_idx][1]]
+        ax.plot(x, y, color=edge_colors, lw=0.8, zorder=1)
+
+    # Dibujar nodos
+    ax.scatter(x_coords, y_coords, s=20, c=node_colors, edgecolor="black", linewidth=0.5, zorder=2)
+
+    # Etiquetas de nodos: nombre y número de usuarios
+    for i, v in enumerate(g_ig.vs):
+        ax.text(
+            x_coords[i],
+            y_coords[i],
+            f"{v['name']}\n({v['users']})",
+            fontsize=6,
+            color="black",
+            ha="center",
+            va="center",
+            zorder=3
+        )
+
+    # Ajustar límites al área del corte
+    if gdf_cut is not None:
+        xmin, ymin, xmax, ymax = gdf_cut.total_bounds
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+
+    plt.title("Grafo de usuarios de energía")
+
+    # Guardar y mostrar
+    file_name ="grafo_ig_energy_users.png"
+    plt.tight_layout()
+    plt.savefig(file_name, dpi=600, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
