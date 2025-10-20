@@ -64,10 +64,10 @@ def main():
     t_0 = 1.0
     params_dic = {'tFa': 1.0, 'Rc0': 1.0, 'tRc': 4.0}
     dt = 0.1  # (h)
-    n = 1
+    n = 1 # n=1 fallos no combinados
 
-    main_graph.vs["energy"] = [1] * main_graph.vcount()
-    main_graph.es["energy"] = [1] * main_graph.ecount()
+    main_graph.vs["energy"] = [1] * main_graph.vcount() #nodos    --> se asigna 1 a todos los energéticos
+    main_graph.es["energy"] = [1] * main_graph.ecount() # aristas --> se asigna 1 a todas las energéticas
 
     scenarios_dic=resil_vuln_analysis.resil_vun_analysis(main_graph,t_0,n,params_dic, dt, fail_drop)
 

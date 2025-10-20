@@ -5,7 +5,7 @@ def resil_vun_analysis(combined_graph,t_0,n,params_dic, dt, fail_drop):
 
     scenarios_dic = {}
 
-    if n==1:
+    if n==1: # solo fallos individuales
 
         '''v_f=combined_graph.vs.find(name= 'Energy network 34999')
         print('Failed asset ' + str(0) + '/' + str(combined_graph.vcount()) + ': node ' + v_f["name"])
@@ -33,14 +33,14 @@ def resil_vun_analysis(combined_graph,t_0,n,params_dic, dt, fail_drop):
     return scenarios_dic
 
 def simulate_scenario(a_f_list,t_0,g_ig,params_dic, dt, fail_drop):
-    scenario_dic={}
+    scenario_dic={} #se guardan aqui (en cada tiempo) los usuarios activos de cada nodo.
     total_users=0
     for v in g_ig.vs:
         scenario_dic[v['name']]=[v['users']]
         total_users+=v['users']
-    #print(total_users)
-    state_flag='initial'
-    t=dt
+    #print(total_users) #numero de usuarios iniciales
+    state_flag='initial' #estado del sistema, actualmente inicial
+    t=dt #en horas
 
     g_ig_energy=g_ig.subgraph([v.index for v in g_ig.vs if v["network"] == 'Energy network'])
     boundary_nodes = [v['name'] for v in g_ig_energy.vs if v["type"] == "boundary"]
