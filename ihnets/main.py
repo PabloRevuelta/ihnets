@@ -39,9 +39,10 @@ def main():
         'Roads network - Energy network': {'connected elements': ['tunnel', 'substations'], 'method': 'closest'},
     }
 
-    extra_file_paths={'tunnels file path':"C:\\Users\\revueltaap\\UNICAN\\EMCAN 2024 A2 ADAPTA - Documentos\\02_Tareas\\Proyecto redes\\DATABASES\\OSM\\osm_tunnels_cantabria.shp",
-                      'cities file path':"C:\\Users\\revueltaap\\UNICAN\\EMCAN 2024 A2 ADAPTA - Documentos\\02_Tareas\\Proyecto redes\\DATABASES\\euro-global-map-shp\\euro-global-map-shp\\euro-global-map-shp\\BuiltupP.shp"
-    }
+    extra_file_paths = {
+        'tunnels file path': r"C:\Users\santamariace\PycharmProjects\ihnets\data\osm_tunnels_cantabria\osm_tunnels_cantabria.shp",
+        'cities file path': r"C:\Users\santamariace\PycharmProjects\ihnets\data\BuiltupP\BuiltupP.shp"
+        }
 
     ################
     # En la versión final, habrá ver como meter sin simular usuarios y flujos en nodos y aristas de las redes y las interconexiones
