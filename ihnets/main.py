@@ -9,15 +9,15 @@ import plots
 
 def main():
 
-    roads_file_path = "C:\\Users\\revueltaap\\UNICAN\\EMCAN 2024 A2 ADAPTA - Documentos\\02_Tareas\\Proyecto redes\\DATABASES\\euro-global-map-shp\\euro-global-map-shp\\euro-global-map-shp\\RoadL.shp"
-    cities_file_path = "C:\\Users\\revueltaap\\UNICAN\\EMCAN 2024 A2 ADAPTA - Documentos\\02_Tareas\\Proyecto redes\\DATABASES\\euro-global-map-shp\\euro-global-map-shp\\euro-global-map-shp\\BuiltupP.shp"
+    roads_file_path = r"C:\Users\santamariace\PycharmProjects\ihnets\data\RoadL\RoadL.shp"
+    cities_file_path = r"C:\Users\santamariace\PycharmProjects\ihnets\data\BuiltupP\BuiltupP.shp"
 
-    rail_file_path = "C:\\Users\\revueltaap\\UNICAN\\EMCAN 2024 A2 ADAPTA - Documentos\\02_Tareas\\Proyecto redes\\DATABASES\\euro-regional-map-shp\\FullEurope\\data\\RailrdL.shp"
-    stops_file_path = "C:\\Users\\revueltaap\\UNICAN\\EMCAN 2024 A2 ADAPTA - Documentos\\02_Tareas\\Proyecto redes\\DATABASES\\euro-regional-map-shp\\FullEurope\\data\\RailrdC.shp"
+    rail_file_path = r"C:\Users\santamariace\PycharmProjects\ihnets\data\RailrdL\RailrdL.shp"
+    stops_file_path = r"C:\Users\santamariace\PycharmProjects\ihnets\data\RailrdC\RailrdC.shp"
 
-    energy_lines_file_path = "C:\\Users\\revueltaap\\UNICAN\\EMCAN 2024 A2 ADAPTA - Documentos\\02_Tareas\\Proyecto redes\\DATABASES\\OSM\\osm_power_lines_cantabria.shp"
-    generation_points_file_path = "C:\\Users\\revueltaap\\UNICAN\\EMCAN 2024 A2 ADAPTA - Documentos\\02_Tareas\\Proyecto redes\\DATABASES\\Combined\\combined_osm_power_cantabria_global_power.shp"
-    substations_file_path = "C:\\Users\\revueltaap\\UNICAN\\EMCAN 2024 A2 ADAPTA - Documentos\\02_Tareas\\Proyecto redes\\DATABASES\\OSM\\osm_power_subest_cantabria.shp"
+    energy_lines_file_path = r"C:\Users\santamariace\PycharmProjects\ihnets\data\osm_power_lines_cantabria\osm_power_lines_cantabria.shp"
+    generation_points_file_path = r"C:\Users\santamariace\PycharmProjects\ihnets\data\combined_osm_power_cantabria_global_power\combined_osm_power_cantabria_global_power.shp"
+    substations_file_path = r"C:\Users\santamariace\PycharmProjects\ihnets\data\osm_power_subest_cantabria\osm_power_subest_cantabria.shp"
 
     networks_dic = {
         'Roads network': {'lines file paths': {'roads': roads_file_path},
