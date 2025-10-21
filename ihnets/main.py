@@ -78,8 +78,8 @@ def main():
 
     scenarios_dic=resil_vuln_analysis.resil_vun_analysis(main_graph,t_0,n,params_dic, dt, fail_drop)
 
-   # with open("datos.json", "w", encoding="utf-8") as f:
-   #     json.dump(scenarios_dic, f, ensure_ascii=False, indent=4)
+    with open("datos.json", "w", encoding="utf-8") as f:
+        json.dump(scenarios_dic, f, ensure_ascii=False, indent=4)
 
     t1 = time.perf_counter()
 
