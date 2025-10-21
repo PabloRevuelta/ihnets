@@ -6,6 +6,9 @@ import networks_intercon_users_flux
 import resil_vuln_analysis
 import plots
 
+import time
+from datetime import datetime
+
 
 def main():
 
@@ -69,10 +72,23 @@ def main():
     main_graph.vs["energy"] = [1] * main_graph.vcount() #nodos    --> se asigna 1 a todos los energéticos
     main_graph.es["energy"] = [1] * main_graph.ecount() # aristas --> se asigna 1 a todas las energéticas
 
+
+    t0 = time.perf_counter()
+
+
     scenarios_dic=resil_vuln_analysis.resil_vun_analysis(main_graph,t_0,n,params_dic, dt, fail_drop)
 
-    with open("datos.json", "w", encoding="utf-8") as f:
-        json.dump(scenarios_dic, f, ensure_ascii=False, indent=4)
+   # with open("datos.json", "w", encoding="utf-8") as f:
+   #     json.dump(scenarios_dic, f, ensure_ascii=False, indent=4)
+
+    t1 = time.perf_counter()
+
+    elapsed = t1 - t0
+
+
+
+    with open("timings.log", "a") as f:
+        f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S}  simulaciones: {elapsed:.2f}s\n")
 
     print('Analysis finished')
 

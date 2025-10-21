@@ -1,34 +1,72 @@
 import numpy as np
 import igraph as ig
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import os
+from tqdm import tqdm
 
-def resil_vun_analysis(combined_graph,t_0,n,params_dic, dt, fail_drop):
 
+def build_cache(g):
+    # Guardamos cosas que no cambian entre simulaciones
+    ener_nodes = [v.index for v in g.vs if v["network"] == "Energy network"]
+    ener_edges = [e.index for e in g.es if
+                  g.vs[e.tuple[0]]["network"] == "Energy network" and
+                  g.vs[e.tuple[1]]["network"] == "Energy network"]
+
+    boundary_nodes = [v['name'] for v in g.vs if 'type' in v.attributes() and v['type'] == "boundary"]
+    power_sources = [v['name'] for v in g.vs if 'type' in v.attributes() and v['type'] == "power sources"]
+    generator_nodes = set(boundary_nodes + power_sources)
+
+    v_name_to_idx = {v["name"]: v.index for v in g.vs if "name" in v.attributes()}
+    e_name_to_idx = {e["name"]: e.index for e in g.es if "name" in e.attributes()}
+
+    return {
+        "ener_nodes": ener_nodes,
+        "ener_edges": ener_edges,
+        "generator_nodes": generator_nodes,
+        "v_name_to_idx": v_name_to_idx,
+        "e_name_to_idx": e_name_to_idx,
+    }
+
+
+
+
+def run_scenario(args):
+    """Función externa para ejecutar un escenario en paralelo."""
+    kind, idx, combined_graph, t_0, params_dic, dt, fail_drop = args
+    g_copy = combined_graph.copy()
+
+    if kind == "node":
+        v = g_copy.vs[idx]
+        return v["name"], simulate_scenario([v], t_0, g_copy, params_dic, dt, fail_drop)
+    else:
+        e = g_copy.es[idx]
+        return e["name"], simulate_scenario([e], t_0, g_copy, params_dic, dt, fail_drop)
+
+
+
+def resil_vun_analysis(combined_graph, t_0, n, params_dic, dt, fail_drop):
     scenarios_dic = {}
 
-    if n==1: # solo fallos individuales
+    if n == 1:
+        cache = build_cache(combined_graph)
 
-        '''v_f=combined_graph.vs.find(name= 'Energy network 34999')
-        print('Failed asset ' + str(0) + '/' + str(combined_graph.vcount()) + ': node ' + v_f["name"])
-        scenarios_dic[v_f["name"]] = simulate_scenario([v_f], t_0, combined_graph, params_dic, dt, fail_drop)
-        # plot_failure_scen(v_f["name"],scenarios_dic)'''
+        nodes = list(range(combined_graph.vcount()))
+        edges = list(range(combined_graph.ecount()))
+        total_jobs = len(nodes) + len(edges)
 
-        print('Nodos: ' + str(combined_graph.vcount()))
-        i = 1
-        for v_f in combined_graph.vs:
-            #if v_f['network']=='Energy network':
-                #v_f=combined_graph.vs.find(name= 'Energy network node end_182')
-            print('Failed asset ' + str(i) + '/' + str(combined_graph.vcount()) + ': node ' + v_f["name"])
-            scenarios_dic[v_f["name"]] = simulate_scenario([v_f], t_0, combined_graph, params_dic, dt, fail_drop)
-            # plot_failure_scen(v_f["name"],scenarios_dic)
-            i += 1
+        # preparamos argumentos para todos los escenarios
+        tasks = [("node", i, combined_graph, t_0, params_dic, dt, fail_drop) for i in nodes] + \
+                [("edge", i, combined_graph, t_0, params_dic, dt, fail_drop) for i in edges]
 
-        print('Aristas: ' + str(combined_graph.ecount()))
-        i = 1
-        for e_f in combined_graph.es:
-            print('Failed asset ' + str(i) + '/' + str(combined_graph.ecount()) + ': edge ' + e_f["name"])
-            scenarios_dic[e_f["name"]] = simulate_scenario([e_f], t_0, combined_graph, params_dic, dt, fail_drop)
-            # plot_failure_scen(e_f.index,scenarios_dic)
-            i += 1
+
+        # Barra de progreso global
+        with ProcessPoolExecutor(max_workers=os.cpu_count()-2) as executor:
+            futures = [executor.submit(run_scenario, args) for args in tasks]
+            for f in tqdm(as_completed(futures), total=total_jobs, desc="Simulaciones"):
+                name, result = f.result()
+                scenarios_dic[name] = result
+
+
 
     return scenarios_dic
 
@@ -49,12 +87,32 @@ def simulate_scenario(a_f_list,t_0,g_ig,params_dic, dt, fail_drop):
     v_ener_name_to_idx = {v["name"]: v.index for v in g_ig_energy.vs if "name" in v.attributes()}
     e_ener_name_to_idx = {e["name"]: e.index for e in g_ig_energy.es if "name" in e.attributes()}
 
-    g_ig_failed_elements_energy=g_ig_energy.copy()
-    comps_energy = g_ig_failed_elements_energy.components(mode="weak")
+    # No copiamos el grafo completo; solo marcamos lo que ha fallado:
+    for element in a_f_list:
+        element["energy"] = 0
+        # refleja el fallo en el subgrafo de energía
+        if element['network'] == 'Energy network':
+            if isinstance(element, ig.Vertex):
+                idx = v_ener_name_to_idx.get(element["name"])
+                if idx is not None:
+                    g_ig_energy.vs[idx]["energy"] = 0
+            elif isinstance(element, ig.Edge):
+                idx = e_ener_name_to_idx.get(element["name"])
+                if idx is not None:
+                    g_ig_energy.es[idx]["energy"] = 0
+
+    # Calculamos las componentes del sistema de energía al inicio
+    active_nodes = [v.index for v in g_ig_energy.vs if v["energy"] == 1]
+    active_edges = [e.index for e in g_ig_energy.es if e["energy"] == 1]
+
+    g_active = g_ig_energy.subgraph_edges(active_edges, delete_vertices=False).induced_subgraph(active_nodes)
+
+    comps_energy = g_active.components(mode="weak")
     membership = comps_energy.membership
     comp_sets = [set(c) for c in comps_energy]
-    all_names = np.array(g_ig_failed_elements_energy.vs["name"])
-    v_name_to_idx = {v["name"]: v.index for v in g_ig_failed_elements_energy.vs if "name" in v.attributes()}
+
+    all_names = np.array(g_active.vs["name"])
+    v_name_to_idx = {v["name"]: v.index for v in g_active.vs if "name" in v.attributes()}
 
     while state_flag!='finished':
         actual_users=0
@@ -95,86 +153,66 @@ def simulate_scenario(a_f_list,t_0,g_ig,params_dic, dt, fail_drop):
 
         # 3. Solo si hubo fallos → recomputar componentes energía
         if change_failed_v or change_failed_e:
+            # Si hubo cambios, recalculamos componentes de energía
             active_nodes = [v.index for v in g_ig_energy.vs if v["energy"] == 1]
             active_edges = [e.index for e in g_ig_energy.es if e["energy"] == 1]
-            g_ig_failed_elements_energy = g_ig_energy.subgraph_edges(active_edges, delete_vertices=False).induced_subgraph(active_nodes)
 
-            comps_energy = g_ig_failed_elements_energy.components(mode="weak")
+            g_active = g_ig_energy.subgraph_edges(active_edges, delete_vertices=False).induced_subgraph(active_nodes)
+
+            comps_energy = g_active.components(mode="weak")
             membership = comps_energy.membership
             comp_sets = [set(c) for c in comps_energy]
-            all_names = np.array(g_ig_failed_elements_energy.vs["name"])
-            v_name_to_idx = {v["name"]: v.index for v in g_ig_failed_elements_energy.vs if "name" in v.attributes()}
+
+            all_names = np.array(g_active.vs["name"])
+            v_name_to_idx = {v["name"]: v.index for v in g_active.vs if "name" in v.attributes()}
 
         for v in g_ig.vs:
-            if v['network']=='Energy network':
-
-                if v['energy']==1:
-
-                    # Obtener índice del nodo en g_ig_energy
+            if v['network'] == 'Energy network':
+                if v['energy'] == 1 and v["name"] in v_name_to_idx:
                     node_idx = v_name_to_idx[v["name"]]
-
-                    # ID del componente al que pertenece
                     comp_id = membership[node_idx]
-
-                    # Conjunto de nodos activos en ese componente
                     reachable_nodes = comp_sets[comp_id]
                     reachable_names = all_names[list(reachable_nodes)]
-
-                    if set(generator_nodes) & set(reachable_names):
-                      node_users=v['users']
-                    else:
-                       #print(v['name'])
-                       node_users=0
+                    node_users = v['users'] if set(generator_nodes) & set(reachable_names) else 0
                 else:
-                    node_users=0
+                    node_users = 0
                 scenario_dic[v['name']].append(node_users)
-
-                actual_users+=node_users
+                actual_users += node_users
 
             else:
                 neighbors_list = g_ig.vs[g_ig.neighbors(v)]
                 node_users = v['users']
-                power=1
+                power = 1
                 for u in neighbors_list:
-                    e=g_ig.es[g_ig.get_eid(u.index, v.index)]
-                    if u['network']=='Energy network':
+                    e = g_ig.es[g_ig.get_eid(u.index, v.index)]
+                    if u['network'] == 'Energy network':
                         if e in a_f_list:
-                            flux_e=asset_failure_profile(t,e[u['name']],t_0,1,params_dic)
-                            if flux_e<1:
-                                state_flag='failure'
+                            flux_e = asset_failure_profile(t, e[u['name']], t_0, 1, params_dic)
+                            if flux_e < 1:
+                                state_flag = 'failure'
                         else:
-                            flux_e=e[u['name']]
-                        power*=u['energy']*flux_e
-                        #if power==0:
-                            #print(u['energy'],flux_e)
-
+                            flux_e = e[u['name']]
+                        power *= u['energy'] * flux_e
                     else:
                         if e in a_f_list:
-                            flux_e=asset_failure_profile(t,e[u['name']],t_0,fail_drop,params_dic)
-                            #print(e[u['name']])
-                            #print(flux_e)
-                            if flux_e<e[u['name']]:
-                                state_flag='failure'
+                            flux_e = asset_failure_profile(t, e[u['name']], t_0, fail_drop, params_dic)
+                            if flux_e < e[u['name']]:
+                                state_flag = 'failure'
                         else:
-                            flux_e=e[u['name']]
-                        reference_value=scenario_dic[u['name']][index]
-                        node_users=node_users-(u['users']*e[u['name']] - reference_value*flux_e)
-                if power==0:
-                    node_users=0
-                elif power==1:
+                            flux_e = e[u['name']]
+                        reference_value = scenario_dic[u['name']][index]
+                        node_users = node_users - (u['users'] * e[u['name']] - reference_value * flux_e)
+                if power == 0:
+                    node_users = 0
+                elif power == 1:
                     if v in a_f_list:
-                        capacity_profile=asset_failure_profile(t,v['users'],t_0,fail_drop,params_dic)
-                        if capacity_profile<v['users']:
-                            state_flag='failure'
-                        if node_users>capacity_profile:
-                            node_users=capacity_profile
-                #if node_users<v['users']:
-                    #print(power)
-                    #print(v['name'])
-                    #print(v['users'])
-                    #print(node_users)
+                        capacity_profile = asset_failure_profile(t, v['users'], t_0, fail_drop, params_dic)
+                        if capacity_profile < v['users']:
+                            state_flag = 'failure'
+                        if node_users > capacity_profile:
+                            node_users = capacity_profile
                 scenario_dic[v['name']].append(node_users)
-                actual_users+=node_users
+                actual_users += node_users
 
         if state_flag == 'failure' and abs(actual_users - total_users) < 0.1:
             state_flag='finished'
