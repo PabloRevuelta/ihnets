@@ -3,6 +3,9 @@ import geopandas as gpd
 import networkx as nx
 from shapely.geometry import LineString, MultiLineString, Point
 import warnings
+import itertools
+import igraph as ig
+
 warnings.filterwarnings("ignore", message=".*Geometry is in a geographic CRS.*")
 
 def networks_creation(networks_dic,gdf_cut,extra_file_paths):
