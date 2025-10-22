@@ -7,6 +7,9 @@ import warnings
 import igraph as ig
 warnings.filterwarnings("ignore", message=".*Geometry is in a geographic CRS.*")
 
+import igraph as ig
+import itertools
+
 def networks_creation(networks_dic,gdf_cut,extra_file_paths):
     for network, dic in networks_dic.items():
         networks_dic[network]['lines gdf'] = combine_gdfs(gdf_cut, dic['lines file paths'])
