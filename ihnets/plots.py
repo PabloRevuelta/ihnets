@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import igraph as ig
 import os
+from pathlib import Path
 
 def plots_networks(networks_dic,networks_intercon_dic,combined_graph,gdf_cut):
 
@@ -118,7 +119,8 @@ def plots_resil_vun_analysis(scenarios_dic):
     plt.grid(True)
     plt.legend()
     file_name ="nodes performance failed "+failed_asset+".png"
-    plt.savefig(file_name, dpi=1200, bbox_inches="tight")
+    save_path=os.path.join(Path.cwd().parent, 'outputs/'+file_name)
+    plt.savefig(save_path, dpi=1200, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
 
@@ -130,7 +132,8 @@ def plot_gdf(network,gdf_lines,gdf_nodes,gdf_cut):
 
     plt.title("Mapa de "+network)
     file_name="mapa "+network+".png"
-    plt.savefig(file_name, dpi=600, bbox_inches="tight")
+    save_path = os.path.join(Path.cwd().parent, 'outputs/' + file_name)
+    plt.savefig(save_path, dpi=1200, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
 
@@ -175,7 +178,8 @@ def plot_ig_graph(network, g_ig, gdf_cut, node_colors, edge_colors):
     # Guardar archivo
     file_name = f"grafo_geom_{network}.png"
     plt.tight_layout()
-    plt.savefig(file_name, dpi=600, bbox_inches="tight")
+    save_path = os.path.join(Path.cwd().parent, 'outputs/' + file_name)
+    plt.savefig(save_path, dpi=1200, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
 
@@ -205,7 +209,8 @@ def plot_ig_asbtract(network,layout, g_ig, node_colors,edge_colors):
 
     # Guardar y abrir
     file_name ="grafo abs "+network+".png"
-    plt.savefig(file_name, dpi=600, bbox_inches="tight")
+    save_path = os.path.join(Path.cwd().parent, 'outputs/' + file_name)
+    plt.savefig(save_path, dpi=1200, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
 
@@ -300,7 +305,8 @@ def plot_ig_users_flux(g_ig, gdf_cut, node_colors,edge_colors):
     plt.title("Grafo de usuarios y flujos de transporte")
 
     file_name ="grafo_ig_transport_users_flux.png"
-    plt.savefig(file_name, dpi=600, bbox_inches="tight")
+    save_path = os.path.join(Path.cwd().parent, 'outputs/' + file_name)
+    plt.savefig(save_path, dpi=1200, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
 
@@ -356,6 +362,7 @@ def plot_ig_users(g_ig, gdf_cut, node_colors, edge_colors):
     # Guardar y mostrar
     file_name ="grafo_ig_energy_users.png"
     plt.tight_layout()
-    plt.savefig(file_name, dpi=600, bbox_inches="tight")
+    save_path = os.path.join(Path.cwd().parent, 'outputs/' + file_name)
+    plt.savefig(save_path, dpi=1200, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
