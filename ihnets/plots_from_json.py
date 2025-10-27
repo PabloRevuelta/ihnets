@@ -1,6 +1,7 @@
 import ijson
 import matplotlib.pyplot as plt
 import os
+from pathlib import Path
 
 def plots_resil_vun_analysis_from_json(json_path):
     plt.figure(figsize=(8, 5))
@@ -21,7 +22,8 @@ def plots_resil_vun_analysis_from_json(json_path):
     plt.xlabel("t (h)")
     plt.grid(True)
     file_name = "performance_curves_all_scens.png"
-    plt.savefig(file_name, dpi=300, bbox_inches="tight")
+    save_path = os.path.join(Path.cwd().parent, 'outputs/' + file_name)
+    plt.savefig(save_path, dpi=1200, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
 
@@ -40,7 +42,8 @@ def plots_resil_vun_analysis_from_json_ind_asset(json_path,asset_name):
                 plt.xlabel("t (h)")
                 plt.grid(True)
                 file_name ="performance curve failed "+failed_asset+".png"
-                plt.savefig(file_name, dpi=1200, bbox_inches="tight")
+                save_path = os.path.join(Path.cwd().parent, 'outputs/' + file_name)
+                plt.savefig(save_path, dpi=1200, bbox_inches="tight")
                 plt.close()
                 os.startfile(file_name)
 
@@ -57,7 +60,8 @@ def plots_resil_vun_analysis_from_json_ind_asset(json_path,asset_name):
                 plt.grid(True)
                 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))  # (x, y) en coordenadas de la figura
                 file_name ="nodes performance failed "+failed_asset+".png"
-                plt.savefig(file_name, dpi=1200, bbox_inches="tight")
+                save_path = os.path.join(Path.cwd().parent, 'outputs/' + file_name)
+                plt.savefig(save_path, dpi=1200, bbox_inches="tight")
                 plt.close()
                 os.startfile(file_name)
 
