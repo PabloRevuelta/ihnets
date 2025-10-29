@@ -4,7 +4,11 @@ import json
 import networks_creation
 import networks_intercon_users_flux
 import resil_vuln_analysis
+import build_directed_graph
 import plots
+
+import matplotlib.pyplot as plt
+from igraph import plot
 
 
 def main():
@@ -54,9 +58,78 @@ def main():
 
     main_graph=networks_intercon_users_flux.networks_interconnection_users_flux(networks_dic,interconnections_dic,extra_file_paths)
 
-    print('Networks created')
+    print("Atributos de nodos:", main_graph.vs.attribute_names())
+    print("Atributos de aristas:", main_graph.es.attribute_names())
 
-    plots.plots_networks(networks_dic, interconnections_dic, main_graph, gdf_cut)
+    print('Original Network created')
+
+    #Comienzo con la creación de mi nueva red dirigida
+
+    directed_graph = build_directed_graph.build_directed_graph(main_graph)
+
+    # Comparar número de nodos y aristas
+    print("Nodos (original vs dirigido):", len(main_graph.vs), len(directed_graph.vs))
+    print("Aristas (original vs dirigido):", len(main_graph.es), len(directed_graph.es))
+
+    # Comparar nombres de atributos de nodos
+    attrs_main = set(main_graph.vs.attribute_names())
+    attrs_dir = set(directed_graph.vs.attribute_names())
+    print("Atributos de nodos (original):", attrs_main)
+    print("Atributos de nodos (dirigido):", attrs_dir)
+    print("Coinciden los atributos:", attrs_main == attrs_dir)
+
+    # Ver atributos de los primeros 5 nodos
+    print("\nPrimeros 5 nodos del grafo original:")
+    for v in main_graph.vs[:5]:
+        print(v.index, v.attributes())
+
+    print("\nPrimeros 5 nodos del grafo dirigido:")
+    for v in directed_graph.vs[:5]:
+        print(v.index, v.attributes())
+
+    one_way_edges = [
+        (e.source, e.target)
+        for e in directed_graph.es
+        if not directed_graph.are_adjacent(e.target, e.source)
+    ]
+    g_oneway = directed_graph.subgraph_edges(one_way_edges, delete_vertices=False)
+
+    # Layout basado en coordenadas geográficas
+    layout = [(v["geometry"].x, v["geometry"].y) for v in g_oneway.vs]
+
+    # Colores por tipo de red
+    color_map = []
+    for v in g_oneway.vs:
+        tipo = v["network"]
+        if tipo == "Energy network":
+            color_map.append("gold")
+        elif tipo == "Roads network":
+            color_map.append("lightcoral")
+        elif tipo == "Railway network":
+            color_map.append("skyblue")
+        else:
+            color_map.append("gray")
+
+    # Plot del grafo unidireccional
+    fig, ax = plt.subplots(figsize=(12, 9))
+    plot(
+        g_oneway,
+        target=ax,
+        layout=layout,
+        vertex_color=color_map,
+        vertex_size=8,
+        vertex_label=[str(v.index) for v in g_oneway.vs],
+        vertex_label_size=12,
+        edge_color="black",
+        edge_arrow_size=0.6,
+    )
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_title("Aristas unidireccionales (energía → transporte)")
+    plt.show()
+
+    return
+
+    #plots.plots_networks(networks_dic, interconnections_dic, main_graph, gdf_cut)
 
     fail_drop = 1.0  # Total
     t_0 = 1.0
@@ -74,7 +147,7 @@ def main():
 
     print('Analysis finished')
 
-    plots.plots_resil_vun_analysis(scenarios_dic)
+    #plots.plots_resil_vun_analysis(scenarios_dic)
 
 
 ########################################################################################################################
