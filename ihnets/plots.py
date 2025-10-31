@@ -4,6 +4,13 @@ import igraph as ig
 import os
 from pathlib import Path
 
+#20251031EDU_Imports para plots de resultados de pagerank
+import geopandas as gpd
+from fontTools.unicodedata import block
+from shapely.geometry import Point, LineString
+from matplotlib.lines import Line2D
+from matplotlib import colors as mcolors
+
 def plots_networks(networks_dic,networks_intercon_dic,combined_graph,gdf_cut):
 
     for network, dic in networks_dic.items():
@@ -366,3 +373,383 @@ def plot_ig_users(g_ig, gdf_cut, node_colors, edge_colors):
     plt.savefig(save_path, dpi=1200, bbox_inches="tight")
     plt.close()
     os.startfile(file_name)
+
+
+#20251031EDU_Se añade plot para resultados de pagerank.
+def plot_pagerank_map(G, gdf_cut, pagerank_attr="pagerank_value",
+                      top_n=10, title="PageRank Map", aristas=False):
+    """
+    Representa los nodos del grafo G sobre el mapa de Cantabria coloreados por PageRank.
+    Si aristas=True, también dibuja las conexiones según su tipo de red.
+    """
+
+    # Extraer coordenadas, pagerank y tipo de red
+    coords = np.array([(G.vs[i]["geometry"].x, G.vs[i]["geometry"].y) for i in range(len(G.vs))])
+    pr = np.array(G.vs[pagerank_attr])
+    net = np.array(G.vs["network"])
+
+    # Escala de color (la pongo logaritimica porque sino se veian todos nodos iguales (la mayoria tienen valores pequeños))
+    cmap = plt.cm.inferno
+    norm = mcolors.LogNorm(vmin=max(min(pr), 1e-6), vmax=max(pr))
+    colors = [cmap(norm(p)) for p in pr]
+
+    # Identificar top y bottom
+    top_idx = np.argsort(pr)[-top_n:]
+    bottom_idx = np.argsort(pr)[:top_n]
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    gdf_cut.plot(ax=ax, color="white", edgecolor="gray", linewidth=0.8)
+
+    # --- Dibujar aristas si se solicita ---
+    if aristas:
+        edge_colors = {
+            "Roads network": "dimgray",     # gris oscuro
+            "Railway network": "saddlebrown",  # marrón
+            "Energy network": "gold"        # amarillo
+        }
+        edges_data = []
+        for e in G.es:
+            u, v = e.tuple
+            net_u = G.vs[u]["network"]
+            net_v = G.vs[v]["network"]
+            # Tipo dominante de la arista
+            if net_u == net_v:
+                edge_type = net_u
+            elif "Energy network" in {net_u, net_v}:
+                edge_type = "Energy network"
+            else:
+                edge_type = "Roads network"
+            line = LineString([Point(coords[u, 0], coords[u, 1]),
+                               Point(coords[v, 0], coords[v, 1])])
+            edges_data.append({"geometry": line, "network": edge_type})
+
+        gdf_edges = gpd.GeoDataFrame(edges_data, crs=gdf_cut.crs)
+        for net_type, color in edge_colors.items():
+            mask = gdf_edges["network"] == net_type
+            if np.any(mask):
+                gdf_edges[mask].plot(ax=ax, color=color, linewidth=0.8, alpha=0.7)
+
+    # --- Símbolos por tipo de red ---
+    markers = {
+        "Roads network": "o",     # círculo
+        "Railway network": "s",   # cuadrado
+        "Energy network": "^"     # triángulo
+    }
+
+    # Dibujar nodos por tipo
+    for net_type, marker in markers.items():
+        mask = net == net_type
+        if np.any(mask):
+            gpd.GeoDataFrame(
+                geometry=[Point(x, y) for x, y in coords[mask]],
+                crs=gdf_cut.crs
+            ).plot(
+                ax=ax, color=np.array(colors, dtype=object)[mask],
+                markersize=25, marker=marker, alpha=0.8, edgecolor="none"
+            )
+
+    # --- Función auxiliar para resaltar top/bottom ---
+    def highlight_nodes(indices, edge_color):
+        points = [Point(coords[i, 0], coords[i, 1]) for i in indices]
+        nets = net[indices]
+        for net_type, marker in markers.items():
+            mask = nets == net_type
+            if np.any(mask):
+                gpd.GeoDataFrame(
+                    geometry=np.array(points, dtype=object)[mask],
+                    crs=gdf_cut.crs
+                ).plot(
+                    ax=ax, facecolor="none", edgecolor=edge_color,
+                    markersize=120, marker=marker, linewidth=1.4
+                )
+
+    highlight_nodes(top_idx, "blue")   # borde azul = top
+    highlight_nodes(bottom_idx, "red") # borde rojo = bottom
+
+    # --- Colorbar ---
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.02)
+    cbar.set_label("PageRank value", fontsize=10)
+
+    # --- Leyenda ---
+    legend_elements = [
+        Line2D([0], [0], marker="o", color="w", label="Roads network",
+               markerfacecolor="gray", markersize=8),
+        Line2D([0], [0], marker="s", color="w", label="Railway network",
+               markerfacecolor="gray", markersize=8),
+        Line2D([0], [0], marker="^", color="w", label="Energy network",
+               markerfacecolor="gray", markersize=8),
+        Line2D([0], [0], marker="o", color="blue", label="Top 10 PageRank (borde azul)",
+               markerfacecolor="none", markersize=10, markeredgewidth=1.4),
+        Line2D([0], [0], marker="o", color="red", label="Bottom 10 PageRank (borde rojo)",
+               markerfacecolor="none", markersize=10, markeredgewidth=1.4)
+    ]
+    if aristas:
+        legend_elements.extend([
+            Line2D([0], [0], color="dimgray", lw=1.5, label="Aristas carretera"),
+            Line2D([0], [0], color="saddlebrown", lw=1.5, label="Aristas ferrocarril"),
+            Line2D([0], [0], color="gold", lw=1.5, label="Aristas energía"),
+        ])
+
+    ax.legend(handles=legend_elements, loc="lower left", fontsize=8, frameon=True)
+
+    ax.set_title(title, fontsize=13)
+    ax.axis("off")
+    plt.tight_layout()
+    plt.show()
+
+
+
+#Esto lo uso solo para "comprender" la importancia de la red de ferrocarriles
+#Ploteo la red de ferrocarriles y los nodos de otras redes a los que apuntan en primer grado los nodos de ferrocarriles
+def plot_debug_rail_connections(G, gdf_cut, title="Debug: Railway Connections"):
+    """
+    Muestra los nodos de ferrocarril, sus aristas internas y las aristas
+    que los conectan con otras redes (carretera y energía),
+    usando colores y símbolos diferenciados.
+
+    Colores:
+      - Aristas internas (Rail↔Rail): marrón
+      - Aristas Rail↔Road: gris oscuro
+      - Aristas Rail↔Energy: amarillo
+    Símbolos:
+      - Ferrocarril: cuadrado azul
+      - Carreteras conectadas: círculo gris
+      - Energía conectada: triángulo dorado
+    """
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    gdf_cut.plot(ax=ax, color="white", edgecolor="gray", linewidth=0.8)
+
+    # Identificar nodos ferroviarios
+    rail_nodes = [v.index for v in G.vs if v["network"] == "Railway network"]
+    coords = {v.index: v["geometry"] for v in G.vs}
+
+    # Listas de aristas
+    edges_internal = []
+    edges_to_roads = []
+    edges_to_energy = []
+
+    # Conjuntos de nodos externos
+    road_targets = set()
+    energy_targets = set()
+
+    for e in G.es:
+        u, v = e.tuple
+        net_u = G.vs[u]["network"]
+        net_v = G.vs[v]["network"]
+
+        # Internas Rail↔Rail
+        if net_u == "Railway network" and net_v == "Railway network":
+            edges_internal.append((u, v))
+
+        # Rail↔Road
+        elif {"Railway network", "Roads network"} <= {net_u, net_v}:
+            edges_to_roads.append((u, v))
+            if net_u == "Roads network":
+                road_targets.add(u)
+            else:
+                road_targets.add(v)
+
+        # Rail↔Energy
+        elif {"Railway network", "Energy network"} <= {net_u, net_v}:
+            edges_to_energy.append((u, v))
+            if net_u == "Energy network":
+                energy_targets.add(u)
+            else:
+                energy_targets.add(v)
+
+    # --- Dibujar aristas ---
+    def plot_edges(edge_list, color, label, lw=1.3, alpha=0.8):
+        for u, v in edge_list:
+            line = LineString([coords[u], coords[v]])
+            gpd.GeoDataFrame(geometry=[line], crs=gdf_cut.crs).plot(
+                ax=ax, color=color, linewidth=lw, alpha=alpha, label=label)
+
+    plot_edges(edges_internal, "saddlebrown", "Railway internal edges", lw=1.8)
+    plot_edges(edges_to_roads, "dimgray", "Edges to Roads network", lw=1.4)
+    plot_edges(edges_to_energy, "gold", "Edges to Energy network", lw=1.4)
+
+    # --- Dibujar nodos ---
+    def plot_nodes(idxs, color, marker, label, size=40):
+        gpd.GeoDataFrame(geometry=[coords[i] for i in idxs], crs=gdf_cut.crs).plot(
+            ax=ax, color=color, marker=marker, markersize=size, label=label)
+
+    # Nodos ferroviarios
+    plot_nodes(rail_nodes, "blue", "s", "Railway nodes", size=50)
+    # Nodos carretera conectados
+    plot_nodes(road_targets, "gray", "o", "Connected Road nodes", size=40)
+    # Nodos energía conectados
+    plot_nodes(energy_targets, "gold", "^", "Connected Energy nodes", size=50)
+
+    # --- Leyenda y formato ---
+    #ax.legend(loc="lower left", fontsize=8, frameon=True)
+    ax.set_title(title, fontsize=13)
+    ax.axis("off")
+    plt.tight_layout()
+    plt.show()
+
+
+
+def plot_pagerank_map_with_electric_types(G, gdf_cut, pagerank_attr="pagerank_value",
+                                          top_n=10, title="PageRank Map", aristas=False):
+    """
+    Representa los nodos del grafo G sobre el mapa de Cantabria coloreados por PageRank.
+    Si aristas=True, también dibuja las conexiones según su tipo de red.
+    Además:
+      - 'power sources' → generadores (borde naranja)
+      - nodos eléctricos con UNA arista interna en la red eléctrica → sumideros (borde verde)
+    """
+
+    # Extraer coordenadas, pagerank, tipo de red y tipo funcional
+    coords = np.array([(G.vs[i]["geometry"].x, G.vs[i]["geometry"].y) for i in range(len(G.vs))])
+    pr = np.array(G.vs[pagerank_attr])
+    net = np.array(G.vs["network"])
+    types = np.array(G.vs["type"])
+
+    # Escala de color logarítmica
+    cmap = plt.cm.inferno
+    norm = mcolors.LogNorm(vmin=max(min(pr), 1e-6), vmax=max(pr))
+    colors = [cmap(norm(p)) for p in pr]
+
+    # Identificar top y bottom
+    top_idx = np.argsort(pr)[-top_n:]
+    bottom_idx = np.argsort(pr)[:top_n]
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    gdf_cut.plot(ax=ax, color="white", edgecolor="gray", linewidth=0.8)
+
+    # --- Dibujar aristas si se solicita ---
+    if aristas:
+        edge_colors = {
+            "Roads network": "dimgray",
+            "Railway network": "saddlebrown",
+            "Energy network": "gold"
+        }
+        edges_data = []
+        for e in G.es:
+            u, v = e.tuple
+            net_u = G.vs[u]["network"]
+            net_v = G.vs[v]["network"]
+            if net_u == net_v:
+                edge_type = net_u
+            elif "Energy network" in {net_u, net_v}:
+                edge_type = "Energy network"
+            else:
+                edge_type = "Roads network"
+            line = LineString([Point(coords[u, 0], coords[u, 1]), Point(coords[v, 0], coords[v, 1])])
+            edges_data.append({"geometry": line, "network": edge_type})
+
+        gdf_edges = gpd.GeoDataFrame(edges_data, crs=gdf_cut.crs)
+        for net_type, color in edge_colors.items():
+            mask = gdf_edges["network"] == net_type
+            if np.any(mask):
+                gdf_edges[mask].plot(ax=ax, color=color, linewidth=0.8, alpha=0.7)
+
+    # --- Símbolos por tipo de red ---
+    markers = {
+        "Roads network": "o",
+        "Railway network": "s",
+        "Energy network": "^"
+    }
+
+    # Dibujar nodos por tipo
+    for net_type, marker in markers.items():
+        mask = net == net_type
+        if np.any(mask):
+            gpd.GeoDataFrame(
+                geometry=[Point(x, y) for x, y in coords[mask]],
+                crs=gdf_cut.crs
+            ).plot(
+                ax=ax, color=np.array(colors, dtype=object)[mask],
+                markersize=25, marker=marker, alpha=0.8, edgecolor="none"
+            )
+
+    # --- Función auxiliar para resaltar top/bottom ---
+    def highlight_nodes(indices, edge_color):
+        points = [Point(coords[i, 0], coords[i, 1]) for i in indices]
+        nets = net[indices]
+        for net_type, marker in markers.items():
+            mask = nets == net_type
+            if np.any(mask):
+                gpd.GeoDataFrame(
+                    geometry=np.array(points, dtype=object)[mask],
+                    crs=gdf_cut.crs
+                ).plot(
+                    ax=ax, facecolor="none", edgecolor=edge_color,
+                    markersize=120, marker=marker, linewidth=1.4
+                )
+
+    highlight_nodes(top_idx, "blue")
+    highlight_nodes(bottom_idx, "red")
+
+    # --- Detectar generadores y sumideros ---
+    power_sources_idx = [
+        i for i in range(len(G.vs))
+        if net[i] == "Energy network" and types[i] == "power sources"
+    ]
+
+    # --- Detectar generadores y sumideros (frontera) ---
+    power_sources_idx = [
+        i for i in range(len(G.vs))
+        if net[i] == "Energy network" and types[i] == "power sources"
+    ]
+
+    # Sumideros = nodos eléctricos con ≥1 conexión a otra red distinta de la eléctrica
+    boundary_energy_idx = [
+        i for i in range(len(G.vs))
+        if net[i] == "Energy network"
+           and any(net[nbr] != "Energy network" for nbr in G.neighbors(i))
+    ]
+
+    def highlight_electric_nodes(indices, edge_color):
+        if not indices:
+            return
+        gpd.GeoDataFrame(
+            geometry=[Point(coords[i, 0], coords[i, 1]) for i in indices],
+            crs=gdf_cut.crs
+        ).plot(
+            ax=ax, facecolor="none", edgecolor=edge_color,
+            markersize=160, marker="^", linewidth=1.6
+        )
+
+    highlight_electric_nodes(power_sources_idx, "orange")  # generadores
+    highlight_electric_nodes(boundary_energy_idx, "green")  # sumideros (frontera)
+
+    # --- Colorbar ---
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.02)
+    cbar.set_label("PageRank value", fontsize=10)
+
+    # --- Leyenda ---
+    legend_elements = [
+        Line2D([0], [0], marker="o", color="w", label="Roads network",
+               markerfacecolor="gray", markersize=8),
+        Line2D([0], [0], marker="s", color="w", label="Railway network",
+               markerfacecolor="gray", markersize=8),
+        Line2D([0], [0], marker="^", color="w", label="Energy network",
+               markerfacecolor="gray", markersize=8),
+        Line2D([0], [0], marker="o", color="blue", label="Top 10 PageRank (borde azul)",
+               markerfacecolor="none", markersize=10, markeredgewidth=1.4),
+        Line2D([0], [0], marker="o", color="red", label="Bottom 10 PageRank (borde rojo)",
+               markerfacecolor="none", markersize=10, markeredgewidth=1.4),
+        Line2D([0], [0], marker="^", color="orange", label="Power sources (generadores)",
+               markerfacecolor="none", markersize=10, markeredgewidth=1.6),
+        Line2D([0], [0], marker="^", color="green", label="Nodos eléctricos con 1 arista interna (sumideros)",
+               markerfacecolor="none", markersize=10, markeredgewidth=1.6)
+    ]
+    if aristas:
+        legend_elements.extend([
+            Line2D([0], [0], color="dimgray", lw=1.5, label="Aristas carretera"),
+            Line2D([0], [0], color="saddlebrown", lw=1.5, label="Aristas ferrocarril"),
+            Line2D([0], [0], color="gold", lw=1.5, label="Aristas energía"),
+        ])
+
+    ax.legend(handles=legend_elements, loc="lower left", fontsize=8, frameon=True)
+
+    ax.set_title(title, fontsize=13)
+    ax.axis("off")
+    plt.tight_layout()
+    plt.show()
